@@ -5,6 +5,7 @@ import createVideoFactory from "./factories/createVideoFactory.js";
 import { jest } from "@jest/globals"
 import { recommendationRepository } from "../src/repositories/recommendationRepository.js";
 import { recommendationService } from "../src/services/recommendationsService.js";
+import * as errorUtils from "../src/utils/errorUtils.js"
 
 let insertedVideo = {
     id: 0,
@@ -76,9 +77,9 @@ describe("POST /recommendations/:id/downvote", () => {
             where: {
                 id: insertedVideo.id
             }
-        })
+        });
         expect(video.score).toBe(insertedVideo.score);
-        expect(response.status).toBe(200)
+        expect(response.status).toBe(200);
     });
 });
 
@@ -88,7 +89,8 @@ describe("GET /recommendations", () => {
         console.log(response);
         expect(response.body.length).toBe(10);
         expect(response.status).toBe(200);
-    })
+    });
+
 });
 
 describe("GET /recommendations/:id", () => {
@@ -96,6 +98,11 @@ describe("GET /recommendations/:id", () => {
         const response = await supertest(app).get(`/recommendations/${insertedVideo.id}`);
         expect(response.body).not.toBeNull();
         expect(response.status).toBe(200);
+    })
+    it("should return 404 error given a not registered id", async () => {
+        const response = await supertest(app).get(`/recommendations/${9768769}`);
+        expect(response.body).not.toBeNull();
+        expect(response.status).toBe(404);
     })
 });
 
@@ -115,7 +122,17 @@ describe("GET /recommendations/random", () => {
     });
 });
 
+
 describe("get random", () => {
+    it("should return with 0 recommendation when nothing registered", async () => {
+        jest.spyOn(global.Math, 'random');
+        jest.spyOn(recommendationRepository, "findAll").mockResolvedValue([]);
+
+        expect(async () => {
+            await recommendationService.getRandom();
+        }).rejects.toEqual({ type: 'not_found', message: "" });
+    });
+
     it("should return videos upper 10 score", async () => {
         jest.spyOn(recommendationService, "getRandom").mockResolvedValue({id: 0, name: "", score: 0, youtubeLink: ""});
         const result = recommendationService.getScoreFilter(0.6);
@@ -127,6 +144,15 @@ describe("get random", () => {
         expect(result).toBe("lte");
     });
 });
+
+describe("get by score", () => {
+    it("sould return all recommendations", async () => {
+        const result = jest.spyOn(recommendationRepository, "findAll").mockResolvedValue([]);
+        await recommendationService.getByScore("gt");
+        expect(result).toBeCalled();
+    });
+});
+
 
 describe("remove video", () => {
     afterAll(async () => {
@@ -141,7 +167,7 @@ describe("remove video", () => {
                 youtubeLink: videoForm.youtubeLink,
                 score: -5
             }
-        })
+        });
         const createdRecommendation = await prisma.recommendation.findUnique({
             where: {
                 name: videoForm.name
